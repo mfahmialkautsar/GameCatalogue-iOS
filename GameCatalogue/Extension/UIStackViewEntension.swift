@@ -12,7 +12,7 @@ extension UIStackView {
 
     func addLogo(game: Game, maxLogo: Int, width: CGFloat = 20, height: CGFloat = 20, marginLeft: CGFloat = 6) {
         let platformList: Set<String> = [
-            "pc", "playstation", "xbox", "ios", "android", "mac", "linux", "nintendo", "web",
+            "pc", "playstation", "xbox", "ios", "android", "mac", "linux", "nintendo", "web"
         ]
         
         var platformLogo = [String]()

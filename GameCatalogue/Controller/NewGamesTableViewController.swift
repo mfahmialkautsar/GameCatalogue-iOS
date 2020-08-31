@@ -16,9 +16,9 @@ class NewGamesTableViewController: UIViewController {
     private var tableOffset: CGPoint?
     private var shouldReloadTable = false
     private var isRefreshing = false
-    private var imageOperation = ImageOperation(queueName: "operation.newGames")
 
     private let refreshControl = UIRefreshControl()
+    private let imageOperation = ImageOperation(queueName: "operation.newGames")
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -82,7 +82,6 @@ class NewGamesTableViewController: UIViewController {
             guard !self.viewModel.isLoading else { return }
             self.loadBar.isHidden = true
             self.loadBar.stopAnimating()
-            self.viewModel.cancelTask()
             for index in 0 ..< self.viewModel.count {
                 let cell = self.newGameTableView.cellForRow(at: IndexPath(row: index, section: 0)) as? GameTableViewCell
                 cell?.cancelDownload()
@@ -99,8 +98,10 @@ extension NewGamesTableViewController: UITableViewDelegate, UITableViewDataSourc
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = newGameTableView.dequeueReusableCell(withIdentifier: "GameCell", for: indexPath) as? GameTableViewCell
+        let game = viewModel.game(at: indexPath.row)
 
-        cell?.configure(with: viewModel.game(at: indexPath.row), tableView: tableView, indexPath: indexPath, operation: imageOperation, loadCell: !isRefreshing)
+        cell?.tableView = tableView
+        cell?.configure(with: game, indexPath: indexPath, operation: imageOperation, loadCell: !isRefreshing)
 
         return cell ?? UITableViewCell()
     }
@@ -130,7 +131,7 @@ extension NewGamesTableViewController: UITableViewDelegate, UITableViewDataSourc
         if game.state == .failed {
             game.image = #imageLiteral(resourceName: "image_placeholder")
             game.state = .new
-            cell?.configure(with: game, tableView: tableView, indexPath: indexPath, operation: imageOperation, loadCell: !isRefreshing)
+            cell?.configure(with: game, indexPath: indexPath, operation: imageOperation, loadCell: !isRefreshing)
         }
 
         navigationController?.pushViewController(detail, animated: true)
@@ -151,8 +152,8 @@ extension NewGamesTableViewController: NewGamesViewModelDelegate {
         newGameTableView.reloadData()
     }
 
-    func fetchDidFail(with cause: Any) {
-        guard let cause = cause as? Int, cause != -999 else { return }
+    func fetchDidFail(with cause: (code: Int, description: String)) {
+        guard cause.code != -999 else { return }
 
         newGameTableView.isHidden = false
         isRefreshing = false
@@ -160,6 +161,6 @@ extension NewGamesTableViewController: NewGamesViewModelDelegate {
         loadBar.stopAnimating()
         if refreshControl.isRefreshing { refreshControl.endRefreshing() }
 
-        AlertManager().show(view: self, errorCode: cause)
+        showNetworkAlert(response: cause)
     }
 }

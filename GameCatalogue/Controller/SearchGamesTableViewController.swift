@@ -13,16 +13,24 @@ class SearchGamesTableViewController: UIViewController {
     @IBOutlet weak var searchGameTableView: UITableView!
     @IBOutlet weak var loadBar: UIActivityIndicatorView!
     @IBOutlet weak var notFoundLabel: UILabel!
-
+    
     private var viewModel: SearchGamesViewModel!
     private var tableOffset: CGPoint?
-    private var refreshControl = UIRefreshControl()
     private var shouldReloadTable = false
     private var isRefreshing = false
-    private var imageOperation = ImageOperation(queueName: "operation.searchGames")
+    private var navBarBackground: UIImage?
+    private var navBarShadow: UIImage?
+    private var navBarTint: UIColor?
+    
+    private let refreshControl = UIRefreshControl()
+    private let imageOperation = ImageOperation(queueName: "operation.searchGames")
 
     override func viewDidLoad() {
         super.viewDidLoad()
+
+        navBarTint = navigationController?.navigationBar.tintColor
+        navBarBackground = navigationController?.navigationBar.backgroundImage(for: .default)
+        navBarShadow = navigationController?.navigationBar.shadowImage
 
         notFoundLabel.isHidden = true
         searchGameTableView.isHidden = true
@@ -32,13 +40,19 @@ class SearchGamesTableViewController: UIViewController {
         searchGameTableView.dataSource = self
         searchGameTableView.delegate = self
         searchGameTableView.register(UINib(nibName: "TableViewCell", bundle: nil), forCellReuseIdentifier: "GameCell")
-        navigationItem.title = "Search Game"
         viewModel = SearchGamesViewModel(delegate: self)
+
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow(_:)), name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: true)
+        navigationController?.navigationBar.setBackgroundImage(navBarBackground, for: .default)
+        navigationController?.navigationBar.shadowImage = navBarShadow
+        navigationController?.navigationBar.tintColor = navBarTint
+        navigationItem.title = "Search Game"
         if isRefreshing {
             refreshControl.beginRefreshing()
             if let tableOffset = tableOffset {
@@ -76,6 +90,16 @@ class SearchGamesTableViewController: UIViewController {
         }
     }
 
+    @objc func keyboardWillShow(_ notification: NSNotification) {
+        if let keyboardHeight = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue.height {
+            UIView.animate(withDuration: CATransaction.animationDuration(), animations: { self.searchGameTableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: keyboardHeight, right: 0) })
+        }
+    }
+
+    @objc func keyboardWillHide(_ notification: NSNotification) {
+        UIView.animate(withDuration: CATransaction.animationDuration(), animations: { self.searchGameTableView.contentInset = .zero })
+    }
+
     @objc fileprivate func refreshData() {
         DispatchQueue.main.async {
             self.viewModel.isLoading = false
@@ -83,7 +107,6 @@ class SearchGamesTableViewController: UIViewController {
             guard !self.viewModel.isLoading else { return }
             self.loadBar.isHidden = true
             self.loadBar.stopAnimating()
-            self.viewModel.cancelTask()
             for index in 0 ..< self.viewModel.count {
                 let cell = self.searchGameTableView.cellForRow(at: IndexPath(row: index, section: 0)) as? GameTableViewCell
                 cell?.cancelDownload()
@@ -91,9 +114,15 @@ class SearchGamesTableViewController: UIViewController {
             self.viewModel.fetchSearchGames(searchText: self.viewModel.keyword, refresh: self.isRefreshing)
         }
     }
-    
+
     deinit {
         viewModel.cancelTask()
+        isRefreshing = true
+        for index in 0 ..< viewModel.count {
+            let cell = searchGameTableView.cellForRow(at: IndexPath(row: index, section: 0)) as? GameTableViewCell
+            cell?.cancelDownload()
+        }
+        NotificationCenter.default.removeObserver(self)
     }
 }
 
@@ -104,17 +133,19 @@ extension SearchGamesTableViewController: UITableViewDelegate, UITableViewDataSo
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = searchGameTableView.dequeueReusableCell(withIdentifier: "GameCell", for: indexPath) as? GameTableViewCell
-        cell?.configure(with: viewModel.game(at: indexPath.row), tableView: tableView, indexPath: indexPath, operation: imageOperation, loadCell: !isRefreshing)
+        let game = viewModel.game(at: indexPath.row)
+
+        cell?.tableView = tableView
+        cell?.configure(with: game, indexPath: indexPath, operation: imageOperation, loadCell: !isRefreshing)
+        
         return cell ?? UITableViewCell()
     }
 
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
         if viewModel.shouldLoadMore && indexPath.row == viewModel.count - 1 {
-            DispatchQueue.main.async {
-                self.loadBar.isHidden = false
-                self.loadBar.startAnimating()
-                self.viewModel.fetchSearchGames(searchText: self.viewModel.keyword)
-            }
+            loadBar.isHidden = false
+            loadBar.startAnimating()
+            viewModel.fetchSearchGames(searchText: self.viewModel.keyword)
         }
     }
 
@@ -123,6 +154,7 @@ extension SearchGamesTableViewController: UITableViewDelegate, UITableViewDataSo
         let game = viewModel.game(at: indexPath.row)
 
         detail.game = game
+        detail.navItem = navigationItem
 
         let cell = tableView.cellForRow(at: indexPath) as? GameTableViewCell
         cell?.updateImageDelegate = detail
@@ -132,7 +164,7 @@ extension SearchGamesTableViewController: UITableViewDelegate, UITableViewDataSo
         if game.state == .failed {
             game.image = #imageLiteral(resourceName: "image_placeholder")
             game.state = .new
-            cell?.configure(with: game, tableView: tableView, indexPath: indexPath, operation: imageOperation, loadCell: !isRefreshing)
+            cell?.configure(with: game, indexPath: indexPath, operation: imageOperation, loadCell: !isRefreshing)
         }
 
         navigationController?.pushViewController(detail, animated: true)
@@ -184,26 +216,26 @@ extension SearchGamesTableViewController: SearchGamesViewModelDelegate {
 
         if viewModel.count == 0 && !viewModel.keyword.isEmpty {
             searchGameTableView.isHidden = true
-            notFoundLabel.text = "\"\(viewModel.keyword)\" not found."
+            notFoundLabel.text = "\"\(viewModel.keyword)\" is not found."
             notFoundLabel.isHidden = false
             return
         }
     }
 
-    func fetchDidFail(with cause: Any) {
-        guard let cause = cause as? Int, cause != -999 else { return }
+    func fetchDidFail(with cause: (code: Int, description: String)) {
+        guard cause.code != -999 else { return }
         searchGameTableView.isHidden = false
         isRefreshing = false
         loadBar.isHidden = true
         loadBar.stopAnimating()
         if refreshControl.isRefreshing { refreshControl.endRefreshing() }
 
-        if cause == 404 && viewModel.count == 0 && viewModel.keyword.isEmpty {
+        if cause.code == 404 && viewModel.count == 0 && viewModel.keyword.isEmpty {
             searchGameTableView.isHidden = true
-            notFoundLabel.text = "\"\(viewModel.keyword)\" not found."
+            notFoundLabel.text = "\"\(viewModel.keyword)\" is not found."
             notFoundLabel.isHidden = false
         }
 
-        AlertManager().show(view: self, errorCode: cause)
+        showNetworkAlert(response: cause)
     }
 }

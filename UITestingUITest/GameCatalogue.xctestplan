@@ -1,0 +1,36 @@
+{
+  "configurations" : [
+    {
+      "id" : "EEC07064-EA3E-4321-9F2F-9BE9B18F2889",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:GameCatalogue.xcodeproj",
+      "identifier" : "89342A9424CFEDE100584616",
+      "name" : "GameCatalogue"
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:GameCatalogue.xcodeproj",
+        "identifier" : "8916806924F962810067B768",
+        "name" : "GameCatalogueTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:GameCatalogue.xcodeproj",
+        "identifier" : "898AAE0A24F8E22600D4055F",
+        "name" : "GameCatalogueUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

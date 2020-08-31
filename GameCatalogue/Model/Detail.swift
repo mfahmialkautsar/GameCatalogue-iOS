@@ -9,10 +9,10 @@
 import Foundation
 
 class Detail {
-    let description: String
-    let developers: String
+    let description: String?
+    let developers: [String]?
     
-    init(description: String, developers: String) {
+    init(description: String?, developers: [String]?) {
         self.description = description
         self.developers = developers
     }

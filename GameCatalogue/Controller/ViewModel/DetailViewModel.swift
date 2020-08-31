@@ -10,11 +10,12 @@ import Foundation
 
 protocol DetailViewModelDelegate: class {
     func fetchDidComplete(response: Detail)
-    func fetchDidFail()
+    func fetchDidFail(cause: (code: Int, description: String))
 }
 
 final class DetailViewModel {
     private weak var delegate: DetailViewModelDelegate?
+    private var gameProvider = GameProvider.sharedInstance
 
     init(delegate: DetailViewModelDelegate) {
         self.delegate = delegate
@@ -23,47 +24,72 @@ final class DetailViewModel {
     let client = Client()
 
     func fetchDetail(id: Int) {
+        cancelTask()
         client.fetchDetail(queueLabel: "fetchDetail", id: id) { result in
             switch result {
             case let .success(response):
                 DispatchQueue.main.async {
-                    var description = "Loading Description..."
-                    var developers = "Loading Developers..."
-
-                    if let desc = response.description {
-                        description = desc
+                    var description = ""
+                    if let descResponse = response.description {
+                        description = descResponse
                     } else {
                         description = ""
                     }
 
-                    if let developersData = response.developers {
-                        developers = ""
-                        var devCount = 0
-                        developersData.forEach { dev in
+                    var developers = [String]()
+                    if let devResponse = response.developers {
+                        devResponse.forEach { dev in
                             if let devName = dev.name {
-                                devCount += 1
-                                if devCount == developersData.count {
-                                    developers += devName
-                                } else {
-                                    developers += devName + ", "
-                                }
+                                developers.append(devName)
                             }
                         }
-                    } else {
-                        developers = "Unknown Developers"
                     }
 
                     self.delegate?.fetchDidComplete(response: Detail(description: description, developers: developers))
                 }
-            case .failure:
+            case let .failure(error):
                 DispatchQueue.main.async {
-                    self.delegate?.fetchDidFail()
+                    self.delegate?.fetchDidFail(cause: error.reason)
                 }
             }
         }
     }
 
-    func cancelTask() {
+    private func cancelTask() {
         client.cancelDetailTask()
+    }
+
+    func favorite(game: Game, completion: @escaping (Result<Game?, ErrorResponse>) -> Void) {
+        if isFavorited(id: game.id) {
+            gameProvider.deleteFavorite(id: game.id) { result in
+                switch result {
+                case .success:
+                    DispatchQueue.main.async {
+                        completion(Result.success(nil))
+                    }
+                case let .failure(error):
+                    DispatchQueue.main.async {
+                        completion(Result.failure(error))
+                    }
+                }
+            }
+        } else {
+            gameProvider.addFavorite(game: game) { result in
+                switch result {
+                case .success:
+                    DispatchQueue.main.async {
+                        completion(Result.success(nil))
+                    }
+                case let .failure(error):
+                    DispatchQueue.main.async {
+                        completion(Result.failure(error))
+                    }
+                }
+            }
+        }
+    }
+
+    func isFavorited(id: Int) -> Bool {
+        return gameProvider.getFavorite().filter({ $0.id == id }).first != nil
     }
 }

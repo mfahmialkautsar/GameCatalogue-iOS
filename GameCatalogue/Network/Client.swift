@@ -13,6 +13,8 @@ final class Client {
         URL(string: "https://api.rawg.io/api/games")!
     }()
 
+    private lazy var apiKey: (key: String, value: String) = (key: "key", value: ProcessInfo.processInfo.environment["API_KEY"] ?? "")
+
     var mainTask: URLSessionDataTask?
     var detailTask: URLSessionDataTask?
     var imageTask: URLSessionDataTask?
@@ -26,20 +28,18 @@ final class Client {
         return URLSession(configuration: config)
     }
 
-    func fetchGames(queueLabel: String, queryItems: [(key: String, value: String)]?, completion: @escaping (Result<CodableGames, ErrorResponse>) -> Void) {
+    func fetchGames(queueLabel: String, queryItems: [(key: String, value: String)] = [], completion: @escaping (Result<CodableGames, ErrorResponse>) -> Void) {
         let queue = DispatchQueue(label: queueLabel, qos: .userInteractive)
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        let queries = [apiKey] + queryItems
+        var qItems = [URLQueryItem]()
 
-        if let queryItems = queryItems {
-            var qItems = [URLQueryItem]()
-
-            queryItems.forEach { arg in
-                let (key, value) = arg
-                qItems.append(URLQueryItem(name: key, value: value))
-            }
-
-            components?.queryItems = qItems
+        queries.forEach { arg in
+            let (key, value) = arg
+            qItems.append(URLQueryItem(name: key, value: value))
         }
+
+        components?.queryItems = qItems
 
         let urlRequest = URLRequest(url: (components?.url)!)
 
@@ -51,26 +51,26 @@ final class Client {
                     case -999:
                         return
                     default:
-                        completion(Result.failure(ErrorResponse.errorCode(error.code)))
+                        completion(Result.failure(ErrorResponse.error(error.code, error.localizedDescription)))
                         return
                     }
                 }
 
                 guard let response = response as? HTTPURLResponse else {
-                    completion(Result.failure(ErrorResponse.responseCode(0)))
+                    completion(Result.failure(ErrorResponse.error(0, "Response Error")))
                     return
                 }
 
                 switch response.statusCode {
                 case 200 ... 299:
                     guard let data = data, let games = try? JSONDecoder().decode(CodableGames.self, from: data) else {
-                        completion(Result.failure(ErrorResponse.responseCode(response.statusCode)))
+                        completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
                         return
                     }
 
                     completion(Result.success(games))
                 default:
-                    completion(Result.failure(ErrorResponse.responseCode(response.statusCode)))
+                    completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
                 }
             }
 
@@ -80,7 +80,13 @@ final class Client {
 
     func fetchDetail(queueLabel: String, id: Int, completion: @escaping (Result<CodableGame, ErrorResponse>) -> Void) {
         let queue = DispatchQueue(label: queueLabel, qos: .userInteractive)
-        let urlRequest = URLRequest(url: baseURL.appendingPathComponent(String(id)))
+
+        baseURL.appendPathComponent(String(id))
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        let queryItem = URLQueryItem(name: apiKey.key, value: apiKey.value)
+        components?.queryItems = [queryItem]
+
+        let urlRequest = URLRequest(url: (components?.url)!)
 
         queue.async {
             self.detailTask = self.session().dataTask(with: urlRequest) { data, response, error in
@@ -89,30 +95,26 @@ final class Client {
                     switch error.code {
                     case -999:
                         return
-                    case 404:
-                        completion(Result.failure(ErrorResponse.errorCode(404)))
-                        return
                     default:
-                        completion(Result.failure(ErrorResponse.errorCode(error.code)))
+                        completion(Result.failure(ErrorResponse.error(error.code, error.localizedDescription)))
                         return
                     }
                 }
 
                 guard let response = response as? HTTPURLResponse else {
-                    completion(Result.failure(ErrorResponse.responseCode(0)))
+                    completion(Result.failure(ErrorResponse.error(0, "Response Error")))
                     return
                 }
 
                 switch response.statusCode {
                 case 200 ... 299:
-                    guard let data = data, let detail = try? JSONDecoder().decode(CodableGame.self, from: data) else {
-                        completion(Result.failure(ErrorResponse.responseCode(response.statusCode)))
+                    guard let data = data, let detail = try? JSONDecoder().decode(CodableGame.self, from: data) else { completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
                         return
                     }
 
                     completion(Result.success(detail))
                 default:
-                    completion(Result.failure(ErrorResponse.responseCode(response.statusCode)))
+                    completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
                 }
             }
 
@@ -120,23 +122,33 @@ final class Client {
         }
     }
 
-    func fetchImage(queueLabel: String, from url: URL, completion: @escaping (Result<Data, ErrorResponse>) -> Void) {
-        let queue = DispatchQueue(label: queueLabel, qos: .userInteractive)
+    func fetchImage(from url: URL, completion: @escaping (Result<Data, ErrorResponse>) -> Void) {
+        let queue = DispatchQueue(label: "fetchImage", qos: .userInteractive)
 
         queue.async {
-            self.imageTask = self.session(timeOut: 120).dataTask(with: url) { data, _, error in
+            self.imageTask = self.session(timeOut: 120).dataTask(with: url) { data, response, error in
 
                 if let error = error as NSError? {
-                    completion(Result.failure(ErrorResponse.errorCode(error.code)))
+                    completion(Result.failure(ErrorResponse.error(error.code, error.localizedDescription)))
                     return
                 }
 
-                guard let data = data else {
-                    completion(Result.failure(ErrorResponse.errorCode(0)))
+                guard let response = response as? HTTPURLResponse else {
+                    completion(Result.failure(ErrorResponse.error(0, "Response Error")))
                     return
                 }
 
-                completion(Result.success(data))
+                switch response.statusCode {
+                case 200 ... 299:
+                    guard let data = data else {
+                        completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
+                        return
+                    }
+
+                    completion(Result.success(data))
+                default:
+                    completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
+                }
             }
 
             self.imageTask?.resume()

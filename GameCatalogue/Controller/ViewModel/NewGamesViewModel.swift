@@ -10,7 +10,7 @@ import Foundation
 
 protocol NewGamesViewModelDelegate: class {
     func fetchDidComplete()
-    func fetchDidFail(with cause: Any)
+    func fetchDidFail(with cause: (code: Int, description: String))
 }
 
 final class NewGamesViewModel {
@@ -22,6 +22,7 @@ final class NewGamesViewModel {
     private var loadMore = true
 
     private let client = Client()
+    var gameProvider = GameProvider.sharedInstance
 
     init(delegate: NewGamesViewModelDelegate) {
         self.delegate = delegate
@@ -48,17 +49,24 @@ final class NewGamesViewModel {
         newGames[index]
     }
 
+    func favorited(gameId: Int) -> Game? {
+        return gameProvider.getFavorite().filter({ $0.id == gameId }).first
+    }
+
     func fetchNewGames(refresh: Bool = false) {
         guard !isFetching || refresh else { return }
         var thePage = page
-        if refresh { thePage = 1 }
+        if refresh {
+            cancelTask()
+            thePage = 1
+        }
         isFetching = true
 
         var queryItems = [(String, String)]()
 
         let date = Date()
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM"
+        formatter.dateFormat = "yyyy-MM-dd"
         let thisMonth = formatter.string(from: date)
 
         if let lastMonthFormatter = Calendar.current.date(byAdding: .month, value: -1, to: date) {
@@ -78,37 +86,7 @@ final class NewGamesViewModel {
                     self.isFetching = false
 
                     response.games.forEach { game in
-                        var genres = [String]()
-                        if let responseGenres = game.genres {
-                            responseGenres.forEach { genre in
-                                if let genreName = genre.name {
-                                    genres.append(genreName)
-                                }
-                            }
-                        }
-
-                        var released = ""
-                        if let responseReleased = game.released {
-                            released = responseReleased
-                        }
-
-                        var rating: Double = 0
-                        if let responseRating = game.rating {
-                            rating = responseRating * 2
-                        }
-
-                        var platforms = Set<String>()
-                        if let responseParentPlatforms = game.parentPlatforms {
-                            responseParentPlatforms.forEach { parentPlatforms in
-                                if let responsePlatform = parentPlatforms.platform {
-                                    if let responseSlug = responsePlatform.slug {
-                                        platforms.insert(responseSlug)
-                                    }
-                                }
-                            }
-                        }
-
-                        self.newGames.append(Game(id: game.id, name: game.name, imagePath: game.imagePath, genreList: genres, released: released, rating: rating, parentPlatformNames: platforms))
+                        self.formEntity(game: game)
                     }
 
                     if self.newGames.count != 0 {
@@ -122,18 +100,53 @@ final class NewGamesViewModel {
             case let .failure(error):
                 DispatchQueue.main.async {
                     self.isFetching = false
-                    if error.reason == 404 {
+                    if error.reason.code == 404 {
                         self.loadMore = false
                     } else {
                         self.loadMore = true
                     }
+
                     self.delegate?.fetchDidFail(with: error.reason)
                 }
             }
         }
     }
 
-    func cancelTask() {
+    private func cancelTask() {
         client.cancelMainTask()
+    }
+    
+    func formEntity(game: CodableGame) {
+        var genres = [String]()
+        if let responseGenres = game.genres {
+            responseGenres.forEach { genre in
+                if let genreName = genre.name {
+                    genres.append(genreName)
+                }
+            }
+        }
+
+        var released = ""
+        if let responseReleased = game.released {
+            released = responseReleased
+        }
+
+        var rating: Double = 0
+        if let responseRating = game.rating {
+            rating = responseRating * 2
+        }
+
+        var platforms = Set<String>()
+        if let responseParentPlatforms = game.parentPlatforms {
+            responseParentPlatforms.forEach { parentPlatforms in
+                if let responsePlatform = parentPlatforms.platform {
+                    if let responseSlug = responsePlatform.slug {
+                        platforms.insert(responseSlug)
+                    }
+                }
+            }
+        }
+
+        self.newGames.append(Game(id: game.id, name: game.name, imagePath: game.imagePath, genreList: genres, released: released, rating: rating, parentPlatformNames: platforms))
     }
 }

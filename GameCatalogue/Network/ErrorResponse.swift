@@ -9,15 +9,12 @@
 import Foundation
 
 enum ErrorResponse: Error {
-    case errorCode(Int)
-    case responseCode(Int)
+    case error(Int, String)
 
-    var reason: Int {
+    var reason: (code: Int, description: String) {
         switch self {
-        case let .errorCode(errorCode):
-            return errorCode
-        case let .responseCode(responseCode):
-            return responseCode
+        case let .error(errorCode, description):
+            return (errorCode, description)
         }
     }
 }
