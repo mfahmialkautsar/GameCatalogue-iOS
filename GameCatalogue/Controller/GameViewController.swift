@@ -11,14 +11,25 @@ import UIKit
 class GameViewController: UIViewController {
     @IBOutlet weak var popularView: UIView!
     @IBOutlet weak var newReleaseView: UIView!
-    @IBOutlet weak var searchButton: UIButton!
+
+    private var navBarTint: UIColor?
 
     var firstTime = true
     override func viewDidLoad() {
         super.viewDidLoad()
-        newReleaseView.isHidden = true
+        newReleaseView?.isHidden = true
+        navBarTint = navigationController?.navigationBar.tintColor
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
         navigationItem.title = "Game Catalogue"
-        searchButton.addTarget(self, action: #selector(presentSearchView), for: .touchUpInside)
+        navigationController?.navigationBar.tintColor = navBarTint
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        navigationItem.title = ""
     }
 
     @IBAction func switchViews(_ sender: UISegmentedControl) {
@@ -29,7 +40,7 @@ class GameViewController: UIViewController {
         case 1:
             if firstTime {
                 firstTime = false
-                let newGame = UIStoryboard(name: "Main", bundle: nil).instantiateViewController(withIdentifier: "NewGameTableViewScene")
+                let newGame = UIStoryboard(name: "Main", bundle: nil).instantiateViewController(withIdentifier: "NewGamesTableViewScene")
                 addChild(newGame)
                 newReleaseView.addSubview(newGame.view)
                 newGame.view.frame = newReleaseView.bounds
@@ -44,8 +55,15 @@ class GameViewController: UIViewController {
         }
     }
 
-    @objc private func presentSearchView() {
+    @IBAction func presentFavoriteView(_ sender: Any) {
+        let favoriteViewController = UIStoryboard(name: "Main", bundle: nil).instantiateViewController(withIdentifier: "FavoriteViewScene")
+
+        navigationController?.present(UINavigationController(rootViewController: favoriteViewController), animated: true, completion: nil)
+    }
+
+    @IBAction func presentSearchView(_ sender: Any) {
         let searchViewController = UIStoryboard(name: "Main", bundle: nil).instantiateViewController(withIdentifier: "SearchViewScene")
+
         navigationController?.present(UINavigationController(rootViewController: searchViewController), animated: true, completion: nil)
     }
 }

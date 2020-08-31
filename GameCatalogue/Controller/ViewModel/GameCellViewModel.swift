@@ -29,10 +29,7 @@ final class GameCellViewModel {
     func fetchImage() {
         guard !game.isDownloading else { return }
 
-        let imageDownloader = Operation()
-
-        imageDownloader.completionBlock = {
-            DispatchQueue(label: "downloadImage\(self.indexPath.row)", qos: .userInteractive).sync {
+        let imageDownloader = BlockOperation {
                 guard let imagePath = self.game.imagePath, imagePath != "" else {
                     self.game.image = #imageLiteral(resourceName: "no_image")
                     self.game.state = .downloaded
@@ -40,17 +37,10 @@ final class GameCellViewModel {
                     return
                 }
 
-                guard !imageDownloader.isCancelled else {
-                    self.game.image = #imageLiteral(resourceName: "broken_image")
-                    self.game.state = .failed
-                    self.delegate?.fetchDidFinish(at: self.indexPath, game: self.game)
-                    return
-                }
-
-                self.client.fetchImage(queueLabel: "fetchImage", from: URL(string: imagePath)!) { result in
+                self.client.fetchImage(from: URL(string: imagePath)!) { result in
                     switch result {
                     case let .success(response):
-                        self.game.image = UIImage(data: response)!
+                        self.game.image = UIImage(data: response) ?? #imageLiteral(resourceName: "broken_image")
                         self.game.state = .downloaded
                         self.delegate?.fetchDidFinish(at: self.indexPath, game: self.game)
                     case .failure:
@@ -59,8 +49,8 @@ final class GameCellViewModel {
                         self.delegate?.fetchDidFinish(at: self.indexPath, game: self.game)
                     }
                 }
-            }
         }
+        imageDownloader.qualityOfService = .userInteractive
 
         game.isDownloading = true
         imageOperation.downloadQueue.addOperation(imageDownloader)

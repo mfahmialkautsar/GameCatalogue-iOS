@@ -9,8 +9,8 @@
 import Foundation
 
 class ImageOperation {
-    let queueName: String
-    let maxOps: Int
+    private let queueName: String
+    private let maxOps: Int
 
     init(queueName: String, maxOps: Int = 7) {
         self.queueName = queueName

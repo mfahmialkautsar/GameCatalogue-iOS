@@ -51,26 +51,26 @@ final class Client {
                     case -999:
                         return
                     default:
-                        completion(Result.failure(ErrorResponse.errorCode(error.code)))
+                        completion(Result.failure(ErrorResponse.error(error.code, error.localizedDescription)))
                         return
                     }
                 }
 
                 guard let response = response as? HTTPURLResponse else {
-                    completion(Result.failure(ErrorResponse.responseCode(0)))
+                    completion(Result.failure(ErrorResponse.error(0, "Response Error")))
                     return
                 }
 
                 switch response.statusCode {
                 case 200 ... 299:
                     guard let data = data, let games = try? JSONDecoder().decode(CodableGames.self, from: data) else {
-                        completion(Result.failure(ErrorResponse.responseCode(response.statusCode)))
+                        completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
                         return
                     }
 
                     completion(Result.success(games))
                 default:
-                    completion(Result.failure(ErrorResponse.responseCode(response.statusCode)))
+                    completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
                 }
             }
 
@@ -89,30 +89,26 @@ final class Client {
                     switch error.code {
                     case -999:
                         return
-                    case 404:
-                        completion(Result.failure(ErrorResponse.errorCode(404)))
-                        return
                     default:
-                        completion(Result.failure(ErrorResponse.errorCode(error.code)))
+                        completion(Result.failure(ErrorResponse.error(error.code, error.localizedDescription)))
                         return
                     }
                 }
 
                 guard let response = response as? HTTPURLResponse else {
-                    completion(Result.failure(ErrorResponse.responseCode(0)))
+                    completion(Result.failure(ErrorResponse.error(0, "Response Error")))
                     return
                 }
 
                 switch response.statusCode {
                 case 200 ... 299:
-                    guard let data = data, let detail = try? JSONDecoder().decode(CodableGame.self, from: data) else {
-                        completion(Result.failure(ErrorResponse.responseCode(response.statusCode)))
+                    guard let data = data, let detail = try? JSONDecoder().decode(CodableGame.self, from: data) else { completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
                         return
                     }
 
                     completion(Result.success(detail))
                 default:
-                    completion(Result.failure(ErrorResponse.responseCode(response.statusCode)))
+                    completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
                 }
             }
 
@@ -120,23 +116,33 @@ final class Client {
         }
     }
 
-    func fetchImage(queueLabel: String, from url: URL, completion: @escaping (Result<Data, ErrorResponse>) -> Void) {
-        let queue = DispatchQueue(label: queueLabel, qos: .userInteractive)
+    func fetchImage(from url: URL, completion: @escaping (Result<Data, ErrorResponse>) -> Void) {
+        let queue = DispatchQueue(label: "fetchImage", qos: .userInteractive)
 
         queue.async {
-            self.imageTask = self.session(timeOut: 120).dataTask(with: url) { data, _, error in
+            self.imageTask = self.session(timeOut: 120).dataTask(with: url) { data, response, error in
 
                 if let error = error as NSError? {
-                    completion(Result.failure(ErrorResponse.errorCode(error.code)))
+                    completion(Result.failure(ErrorResponse.error(error.code, error.localizedDescription)))
                     return
                 }
 
-                guard let data = data else {
-                    completion(Result.failure(ErrorResponse.errorCode(0)))
+                guard let response = response as? HTTPURLResponse else {
+                    completion(Result.failure(ErrorResponse.error(0, "Response Error")))
                     return
                 }
 
-                completion(Result.success(data))
+                switch response.statusCode {
+                case 200 ... 299:
+                    guard let data = data else {
+                        completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
+                        return
+                    }
+
+                    completion(Result.success(data))
+                default:
+                    completion(Result.failure(ErrorResponse.error(response.statusCode, response.description)))
+                }
             }
 
             self.imageTask?.resume()
